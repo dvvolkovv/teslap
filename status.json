@@ -1,0 +1,67 @@
+{
+  "phase": "requirements",
+  "created_at": "2026-03-03T08:20:55.126825+00:00",
+  "updated_at": "2026-03-03T15:30:00.000000+00:00",
+  "tasks": {
+    "business-analysis": {
+      "status": "completed",
+      "agent": "business-analyst",
+      "completed_at": "2026-03-03T15:30:00.000000+00:00"
+    }
+  },
+  "artifacts": [
+    {
+      "name": "idea.md",
+      "path": "projects/мне-нужно-запустить-новую-инфраструктуру-для-neoba-20260303-152055/idea.md",
+      "created_by": "user",
+      "created_at": "2026-03-03T08:20:55.127137+00:00"
+    },
+    {
+      "name": "prd.md",
+      "path": "projects/мне-нужно-запустить-новую-инфраструктуру-для-neoba-20260303-152055/docs/prd.md",
+      "created_by": "business-analyst",
+      "created_at": "2026-03-03T15:25:00.000000+00:00"
+    },
+    {
+      "name": "personas.md",
+      "path": "projects/мне-нужно-запустить-новую-инфраструктуру-для-neoba-20260303-152055/docs/personas.md",
+      "created_by": "business-analyst",
+      "created_at": "2026-03-03T15:26:00.000000+00:00"
+    },
+    {
+      "name": "user-stories.md",
+      "path": "projects/мне-нужно-запустить-новую-инфраструктуру-для-neoba-20260303-152055/docs/user-stories.md",
+      "created_by": "business-analyst",
+      "created_at": "2026-03-03T15:27:00.000000+00:00"
+    },
+    {
+      "name": "competitive-analysis.md",
+      "path": "projects/мне-нужно-запустить-новую-инфраструктуру-для-neoba-20260303-152055/docs/competitive-analysis.md",
+      "created_by": "business-analyst",
+      "created_at": "2026-03-03T15:28:00.000000+00:00"
+    }
+  ],
+  "decisions": [
+    {
+      "id": "D001",
+      "decision": "MVP scope defined as: CBS with multi-currency, SEPA payments, Mastercard virtual+physical cards, Sumsub KYC/AML, basic Fuse.io crypto (buy/sell/send/receive), native mobile apps (iOS+Android)",
+      "rationale": "Covers all client requirements at MVP level; advanced features (business accounts, DeFi yield, Open Banking) deferred to Phase 2",
+      "made_by": "business-analyst",
+      "date": "2026-03-03"
+    },
+    {
+      "id": "D002",
+      "decision": "Flutter recommended as mobile framework over separate native (Swift+Kotlin)",
+      "rationale": "Fuse.io provides Flutter SDK; single codebase reduces development time by ~40%; Flutter maturity is sufficient for banking apps",
+      "made_by": "business-analyst",
+      "date": "2026-03-03"
+    },
+    {
+      "id": "D003",
+      "decision": "TeslaPay primary differentiator: regulated EU banking + self-custodial Web3 wallet with DeFi yield",
+      "rationale": "No competitor occupies this niche; Revolut/N26 lack DeFi; Crypto.com lacks banking depth",
+      "made_by": "business-analyst",
+      "date": "2026-03-03"
+    }
+  ]
+}
