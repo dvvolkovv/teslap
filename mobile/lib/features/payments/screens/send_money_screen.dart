@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_input.dart';
+import '../bloc/payment_bloc.dart';
 
-/// Multi-step send money flow matching the user flow spec.
-///
+/// Multi-step send money flow.
 /// Steps: 1) Select recipient  2) Enter amount  3) Review and confirm
 class SendMoneyScreen extends StatefulWidget {
   const SendMoneyScreen({super.key});
@@ -23,7 +24,6 @@ class _SendMoneyScreenState extends State<SendMoneyScreen> {
   final _amountController = TextEditingController();
   final _referenceController = TextEditingController();
   bool _isInstant = false;
-  bool _isSending = false;
 
   @override
   void dispose() {
@@ -50,64 +50,73 @@ class _SendMoneyScreenState extends State<SendMoneyScreen> {
     }
   }
 
-  Future<void> _send() async {
-    setState(() => _isSending = true);
-
-    // TODO: Call payment API
-    await Future<void>.delayed(const Duration(seconds: 2));
-
-    if (!mounted) return;
-    setState(() => _isSending = false);
-
-    // Show success and pop
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'EUR ${_amountController.text} sent to ${_nameController.text}',
-          ),
-          backgroundColor: AppColors.success500,
-        ),
-      );
-      context.pop();
-    }
+  void _send() {
+    context.read<PaymentBloc>().add(PaymentSepaRequested(
+          senderAccountId: '', // Will use default account on backend
+          recipientIban: _ibanController.text,
+          recipientName: _nameController.text,
+          amount: _amountController.text,
+          reference: _referenceController.text.isNotEmpty
+              ? _referenceController.text
+              : null,
+        ));
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        leading: BackButton(onPressed: _previousStep),
-        title: const Text('Send Money'),
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Progress indicator
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.screenMargin,
+    return BlocListener<PaymentBloc, PaymentState>(
+      listener: (context, state) {
+        if (state is PaymentSuccess) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'EUR ${_amountController.text} sent to ${_nameController.text}',
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(AppRadius.full),
-                child: LinearProgressIndicator(
-                  value: (_step + 1) / 3,
-                  backgroundColor: AppColors.neutral100,
-                  valueColor: const AlwaysStoppedAnimation<Color>(
-                    AppColors.primary500,
+              backgroundColor: AppColors.success500,
+            ),
+          );
+          context.pop();
+        } else if (state is PaymentError) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(state.message),
+              backgroundColor: AppColors.error500,
+            ),
+          );
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading: BackButton(onPressed: _previousStep),
+          title: const Text('Send Money'),
+        ),
+        body: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.screenMargin,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadius.full),
+                  child: LinearProgressIndicator(
+                    value: (_step + 1) / 3,
+                    backgroundColor: AppColors.neutral100,
+                    valueColor: const AlwaysStoppedAnimation<Color>(
+                      AppColors.primary500,
+                    ),
+                    minHeight: 4,
                   ),
-                  minHeight: 4,
                 ),
               ),
-            ),
-
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 250),
-                child: _buildStep(),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  child: _buildStep(),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -129,15 +138,19 @@ class _SendMoneyScreenState extends State<SendMoneyScreen> {
           onInstantChanged: (v) => setState(() => _isInstant = v),
           onContinue: _nextStep,
         ),
-      _ => _ReviewStep(
-          key: const ValueKey('review'),
-          name: _nameController.text,
-          iban: _ibanController.text,
-          amount: _amountController.text,
-          reference: _referenceController.text,
-          isInstant: _isInstant,
-          isSending: _isSending,
-          onConfirm: _nextStep,
+      _ => BlocBuilder<PaymentBloc, PaymentState>(
+          builder: (context, state) {
+            return _ReviewStep(
+              key: const ValueKey('review'),
+              name: _nameController.text,
+              iban: _ibanController.text,
+              amount: _amountController.text,
+              reference: _referenceController.text,
+              isInstant: _isInstant,
+              isSending: state is PaymentLoading,
+              onConfirm: _nextStep,
+            );
+          },
         ),
     };
   }
@@ -184,10 +197,7 @@ class _RecipientStep extends StatelessWidget {
             textInputAction: TextInputAction.done,
           ),
           const SizedBox(height: AppSpacing.xl),
-          AppButton(
-            label: 'Continue',
-            onPressed: onContinue,
-          ),
+          AppButton(label: 'Continue', onPressed: onContinue),
         ],
       ),
     );
@@ -220,32 +230,6 @@ class _AmountStep extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           Text('Enter Amount', style: AppTypography.h1),
           const SizedBox(height: AppSpacing.lg),
-
-          // Source account indicator
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              color: AppColors.neutral100,
-              borderRadius: BorderRadius.circular(AppRadius.sm),
-            ),
-            child: Row(
-              children: [
-                Text(
-                  'From: EUR Account',
-                  style: AppTypography.body2,
-                ),
-                const Spacer(),
-                Text(
-                  'EUR 3,245.67',
-                  style: AppTypography.body2.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-
           AppInput(
             label: 'Amount',
             hint: '0.00',
@@ -253,13 +237,9 @@ class _AmountStep extends StatelessWidget {
             variant: AppInputVariant.amount,
             prefixIcon: const Padding(
               padding: EdgeInsets.only(left: AppSpacing.md),
-              child: Text(
-                'EUR',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 16,
-                ),
-              ),
+              child: Text('EUR',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w600, fontSize: 16)),
             ),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -270,13 +250,11 @@ class _AmountStep extends StatelessWidget {
             textInputAction: TextInputAction.done,
           ),
           const SizedBox(height: AppSpacing.lg),
-
-          // Transfer speed toggle
           Row(
             children: [
               Expanded(
-                child: Text('SEPA Instant', style: AppTypography.body1),
-              ),
+                  child: Text('SEPA Instant',
+                      style: AppTypography.body1)),
               Switch(
                 value: isInstant,
                 onChanged: onInstantChanged,
@@ -288,16 +266,11 @@ class _AmountStep extends StatelessWidget {
             isInstant
                 ? 'Arrives in 10 seconds. Fee: EUR 0.50'
                 : 'Arrives in 1 business day. Fee: EUR 0.00',
-            style: AppTypography.caption.copyWith(
-              color: AppColors.neutral500,
-            ),
+            style: AppTypography.caption
+                .copyWith(color: AppColors.neutral500),
           ),
           const SizedBox(height: AppSpacing.xl),
-
-          AppButton(
-            label: 'Continue',
-            onPressed: onContinue,
-          ),
+          AppButton(label: 'Continue', onPressed: onContinue),
         ],
       ),
     );
@@ -334,15 +307,13 @@ class _ReviewStep extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           Text('Review Your Transfer', style: AppTypography.h1),
           const SizedBox(height: AppSpacing.lg),
-
           _ReviewRow(label: 'From', value: 'EUR Account'),
           _ReviewRow(label: 'To', value: name),
           _ReviewRow(label: 'IBAN', value: iban),
           _ReviewRow(label: 'Amount', value: 'EUR $amount'),
           _ReviewRow(
-            label: 'Fee',
-            value: isInstant ? 'EUR 0.50' : 'EUR 0.00',
-          ),
+              label: 'Fee',
+              value: isInstant ? 'EUR 0.50' : 'EUR 0.00'),
           _ReviewRow(
             label: 'Total',
             value:
@@ -351,11 +322,11 @@ class _ReviewStep extends StatelessWidget {
           ),
           _ReviewRow(
             label: 'Delivery',
-            value: isInstant ? 'Instant (SEPA Inst)' : '1 business day',
+            value:
+                isInstant ? 'Instant (SEPA Inst)' : '1 business day',
           ),
           if (reference.isNotEmpty)
             _ReviewRow(label: 'Reference', value: reference),
-
           const SizedBox(height: AppSpacing.xl),
           AppButton(
             label: 'Confirm with Face ID',
@@ -389,18 +360,16 @@ class _ReviewRow extends StatelessWidget {
         children: [
           SizedBox(
             width: 100,
-            child: Text(
-              label,
-              style: AppTypography.body2.copyWith(
-                color: AppColors.neutral500,
-              ),
-            ),
+            child: Text(label,
+                style: AppTypography.body2
+                    .copyWith(color: AppColors.neutral500)),
           ),
           Expanded(
             child: Text(
               value,
               style: isBold
-                  ? AppTypography.body1.copyWith(fontWeight: FontWeight.w600)
+                  ? AppTypography.body1
+                      .copyWith(fontWeight: FontWeight.w600)
                   : AppTypography.body1,
               textAlign: TextAlign.right,
             ),

@@ -1,8 +1,8 @@
 /// Centralised API endpoint constants derived from the TeslaPay API contract.
 abstract final class ApiEndpoints {
-  static const String baseUrl = 'https://api.teslapay.eu/api/v1';
+  static const String baseUrl = 'https://b.teslapay.io/api/v1';
   static const String stagingBaseUrl =
-      'https://api.staging.teslapay.eu/api/v1';
+      'https://b.teslapay.io/api/v1';
 
   // ---------------------------------------------------------------------------
   // Auth
@@ -82,7 +82,7 @@ abstract final class ApiEndpoints {
   // ---------------------------------------------------------------------------
   // KYC
   // ---------------------------------------------------------------------------
-  static const String kycVerify = '/kyc/verify';
+  static const String kycStart = '/kyc/start';
   static const String kycStatus = '/kyc/status';
   static const String kycUpgrade = '/kyc/upgrade';
 

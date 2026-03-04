@@ -1,292 +1,308 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../../core/routing/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/app_card.dart';
+import '../bloc/home_bloc.dart';
 import '../widgets/balance_card.dart';
 import '../widgets/quick_actions.dart';
 import '../widgets/transaction_list_tile.dart';
 
-/// Home dashboard matching the wireframe from the design system.
-///
-/// Sections:
-/// 1. Balance card (hero)
-/// 2. Quick actions row
-/// 3. Accounts overview
-/// 4. Recent transactions (last 5)
-/// 5. Crypto portfolio summary (if activated)
-class HomeScreen extends StatelessWidget {
+/// Home dashboard — loads real data from the backend via [HomeBloc].
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    context.read<HomeBloc>().add(const HomeLoadRequested());
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: RefreshIndicator(
-          color: AppColors.primary500,
-          onRefresh: () async {
-            // TODO: reload accounts, transactions, crypto balance
-            await Future<void>.delayed(const Duration(milliseconds: 800));
-          },
-          child: CustomScrollView(
-            slivers: [
-              // App bar
-              SliverAppBar(
-                floating: true,
-                snap: true,
-                backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-                title: Text(
-                  'TeslaPay',
-                  style: AppTypography.h2.copyWith(
-                    fontWeight: FontWeight.w700,
+        child: BlocBuilder<HomeBloc, HomeState>(
+          builder: (context, state) {
+            return RefreshIndicator(
+              color: AppColors.primary500,
+              onRefresh: () async {
+                context.read<HomeBloc>().add(const HomeRefreshRequested());
+                await context.read<HomeBloc>().stream.firstWhere(
+                      (s) => s is! HomeLoading,
+                    );
+              },
+              child: CustomScrollView(
+                slivers: [
+                  SliverAppBar(
+                    floating: true,
+                    snap: true,
+                    backgroundColor:
+                        Theme.of(context).scaffoldBackgroundColor,
+                    title: Text(
+                      'TeslaPay',
+                      style: AppTypography.h2
+                          .copyWith(fontWeight: FontWeight.w700),
+                    ),
+                    centerTitle: false,
+                    actions: [
+                      IconButton(
+                        icon:
+                            const Icon(PhosphorIconsRegular.bellSimple),
+                        onPressed: () {},
+                        tooltip: 'Notifications',
+                      ),
+                    ],
                   ),
-                ),
-                centerTitle: false,
-                actions: [
-                  IconButton(
-                    icon: const Icon(PhosphorIconsRegular.bellSimple),
-                    onPressed: () {
-                      // TODO: navigate to notifications
-                    },
-                    tooltip: 'Notifications',
-                  ),
+                  if (state is HomeLoading)
+                    const SliverFillRemaining(
+                      child:
+                          Center(child: CircularProgressIndicator()),
+                    )
+                  else if (state is HomeError)
+                    SliverFillRemaining(
+                      child: _ErrorView(
+                        message: state.message,
+                        onRetry: () => context
+                            .read<HomeBloc>()
+                            .add(const HomeLoadRequested()),
+                      ),
+                    )
+                  else if (state is HomeLoaded)
+                    _LoadedContent(state: state),
                 ],
               ),
-
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.screenMargin,
-                ),
-                sliver: SliverList(
-                  delegate: SliverChildListDelegate([
-                    // -------------------------------------------------------
-                    // Balance Card
-                    // -------------------------------------------------------
-                    const BalanceCard(
-                      totalBalance: '3,245.67',
-                      currency: 'EUR',
-                      changePercent: '+0.42',
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-
-                    // -------------------------------------------------------
-                    // Quick Actions
-                    // -------------------------------------------------------
-                    QuickActions(
-                      onSend: () => context.push(AppRoutes.sendMoney),
-                      onRequest: () {
-                        // TODO: navigate to request money
-                      },
-                      onExchange: () {
-                        // TODO: navigate to exchange
-                      },
-                      onTopUp: () {
-                        // TODO: show top-up bottom sheet
-                      },
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-
-                    // -------------------------------------------------------
-                    // Accounts Overview
-                    // -------------------------------------------------------
-                    _SectionHeader(
-                      title: 'Accounts',
-                      actionLabel: 'See all',
-                      onAction: () {
-                        // TODO: navigate to accounts list
-                      },
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    AppCard(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: AppSpacing.sm,
-                      ),
-                      child: Column(
-                        children: [
-                          _AccountRow(
-                            flag: 'EU',
-                            currency: 'EUR',
-                            balance: 'EUR 2,845.67',
-                            onTap: () {
-                              // TODO: navigate to EUR account detail
-                            },
-                          ),
-                          const Divider(
-                            indent: AppSpacing.xxl + AppSpacing.md,
-                            height: 1,
-                          ),
-                          _AccountRow(
-                            flag: 'US',
-                            currency: 'USD',
-                            balance: 'USD 420.00',
-                            onTap: () {
-                              // TODO: navigate to USD account detail
-                            },
-                          ),
-                          const Divider(
-                            indent: AppSpacing.xxl + AppSpacing.md,
-                            height: 1,
-                          ),
-                          ListTile(
-                            leading: Container(
-                              width: 32,
-                              height: 32,
-                              decoration: const BoxDecoration(
-                                color: AppColors.primary50,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                PhosphorIconsRegular.plus,
-                                size: 16,
-                                color: AppColors.primary500,
-                              ),
-                            ),
-                            title: Text(
-                              'Add currency',
-                              style: AppTypography.body2.copyWith(
-                                color: AppColors.primary500,
-                              ),
-                            ),
-                            dense: true,
-                            onTap: () {
-                              // TODO: show add currency bottom sheet
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-
-                    // -------------------------------------------------------
-                    // Recent Transactions
-                    // -------------------------------------------------------
-                    _SectionHeader(
-                      title: 'Recent Transactions',
-                      actionLabel: 'See all',
-                      onAction: () {
-                        // TODO: navigate to full transaction history
-                      },
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    AppCard(
-                      padding: EdgeInsets.zero,
-                      child: Column(
-                        children: [
-                          TransactionListTile(
-                            title: 'Starbucks',
-                            subtitle: 'Card payment  Today 09:15',
-                            amount: '-EUR 4.50',
-                            onTap: () {},
-                          ),
-                          const Divider(
-                            indent: AppSpacing.xxl + AppSpacing.lg,
-                            height: 1,
-                          ),
-                          TransactionListTile(
-                            title: 'Anna Kowalski',
-                            subtitle: 'SEPA transfer  Yesterday',
-                            amount: '-EUR 200.00',
-                            onTap: () {},
-                          ),
-                          const Divider(
-                            indent: AppSpacing.xxl + AppSpacing.lg,
-                            height: 1,
-                          ),
-                          TransactionListTile(
-                            title: 'Monthly Salary',
-                            subtitle: 'SEPA received  28 Feb',
-                            amount: '+EUR 3,200.00',
-                            isPositive: true,
-                            onTap: () {},
-                          ),
-                          const Divider(
-                            indent: AppSpacing.xxl + AppSpacing.lg,
-                            height: 1,
-                          ),
-                          TransactionListTile(
-                            title: 'FUSE Purchase',
-                            subtitle: 'Crypto buy  28 Feb',
-                            amount: '-EUR 20.00',
-                            onTap: () {},
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-
-                    // -------------------------------------------------------
-                    // Crypto Portfolio Summary
-                    // -------------------------------------------------------
-                    _SectionHeader(
-                      title: 'Crypto Portfolio',
-                      actionLabel: 'View',
-                      onAction: () => context.go(AppRoutes.crypto),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    AppCard(
-                      gradient: AppColors.cryptoGradient,
-                      onTap: () => context.go(AppRoutes.crypto),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Total',
-                                style: AppTypography.caption.copyWith(
-                                  color:
-                                      AppColors.white.withValues(alpha: 0.8),
-                                ),
-                              ),
-                              const SizedBox(height: AppSpacing.xxs),
-                              Text(
-                                'EUR 19.70',
-                                style: AppTypography.h3.copyWith(
-                                  color: AppColors.white,
-                                ),
-                              ),
-                            ],
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.sm,
-                              vertical: AppSpacing.xs,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.white.withValues(alpha: 0.2),
-                              borderRadius:
-                                  BorderRadius.circular(AppRadius.xl),
-                            ),
-                            child: Text(
-                              '+3.2% 24h',
-                              style: AppTypography.caption.copyWith(
-                                color: AppColors.white,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: AppSpacing.xxl),
-                  ]),
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
   }
 }
 
-// ---------------------------------------------------------------------------
-// Private helpers
-// ---------------------------------------------------------------------------
+class _ErrorView extends StatelessWidget {
+  const _ErrorView({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.screenMargin),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(PhosphorIconsRegular.warning,
+                size: 48, color: AppColors.error500),
+            const SizedBox(height: AppSpacing.md),
+            Text('Failed to load data', style: AppTypography.h3),
+            const SizedBox(height: AppSpacing.sm),
+            Text(message,
+                style: AppTypography.body2
+                    .copyWith(color: AppColors.neutral500),
+                textAlign: TextAlign.center),
+            const SizedBox(height: AppSpacing.lg),
+            TextButton(onPressed: onRetry, child: const Text('Retry')),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LoadedContent extends StatelessWidget {
+  const _LoadedContent({required this.state});
+
+  final HomeLoaded state;
+
+  @override
+  Widget build(BuildContext context) {
+    final accounts = state.accounts;
+    final transactions = state.transactions;
+
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.screenMargin),
+      sliver: SliverList(
+        delegate: SliverChildListDelegate([
+          BalanceCard(
+            totalBalance: state.totalBalanceEur,
+            currency: 'EUR',
+            changePercent: '',
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          QuickActions(
+            onSend: () => context.push(AppRoutes.sendMoney),
+            onRequest: () {},
+            onExchange: () {},
+            onTopUp: () {},
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          _SectionHeader(
+              title: 'Accounts',
+              actionLabel: 'See all',
+              onAction: () {}),
+          const SizedBox(height: AppSpacing.sm),
+          _AccountsCard(accounts: accounts),
+          const SizedBox(height: AppSpacing.lg),
+          _SectionHeader(
+              title: 'Recent Transactions',
+              actionLabel: 'See all',
+              onAction: () {}),
+          const SizedBox(height: AppSpacing.sm),
+          _TransactionsCard(transactions: transactions),
+          const SizedBox(height: AppSpacing.lg),
+          _SectionHeader(
+              title: 'Crypto Portfolio',
+              actionLabel: 'View',
+              onAction: () => context.go(AppRoutes.crypto)),
+          const SizedBox(height: AppSpacing.sm),
+          AppCard(
+            gradient: AppColors.cryptoGradient,
+            onTap: () => context.go(AppRoutes.crypto),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Total',
+                        style: AppTypography.caption.copyWith(
+                            color:
+                                AppColors.white.withValues(alpha: 0.8))),
+                    const SizedBox(height: AppSpacing.xxs),
+                    Text('View portfolio',
+                        style: AppTypography.h3
+                            .copyWith(color: AppColors.white)),
+                  ],
+                ),
+                const Icon(Icons.chevron_right, color: AppColors.white),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xxl),
+        ]),
+      ),
+    );
+  }
+}
+
+class _AccountsCard extends StatelessWidget {
+  const _AccountsCard({required this.accounts});
+
+  final List<dynamic> accounts;
+
+  @override
+  Widget build(BuildContext context) {
+    if (accounts.isEmpty) {
+      return AppCard(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Center(
+            child: Text('No accounts yet',
+                style: AppTypography.body2
+                    .copyWith(color: AppColors.neutral500)),
+          ),
+        ),
+      );
+    }
+
+    final widgets = <Widget>[];
+    for (final acc in accounts) {
+      final map = acc as Map<String, dynamic>;
+      final subs = map['sub_accounts'] as List<dynamic>? ?? [];
+      for (final sub in subs) {
+        final s = sub as Map<String, dynamic>;
+        final cur = s['currency'] as String? ?? 'EUR';
+        final bal = s['balance'] as Map<String, dynamic>?;
+        final avail = bal?['available']?.toString() ?? '0.00';
+        final flag = cur == 'EUR'
+            ? 'EU'
+            : cur == 'USD'
+                ? 'US'
+                : cur == 'GBP'
+                    ? 'GB'
+                    : cur.substring(0, 2);
+        if (widgets.isNotEmpty) {
+          widgets.add(const Divider(
+              indent: AppSpacing.xxl + AppSpacing.md, height: 1));
+        }
+        widgets.add(_AccountRow(
+            flag: flag, currency: cur, balance: '$cur $avail'));
+      }
+    }
+
+    return AppCard(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Column(children: widgets),
+    );
+  }
+}
+
+class _TransactionsCard extends StatelessWidget {
+  const _TransactionsCard({required this.transactions});
+
+  final List<dynamic> transactions;
+
+  @override
+  Widget build(BuildContext context) {
+    if (transactions.isEmpty) {
+      return AppCard(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Center(
+            child: Text('No transactions yet',
+                style: AppTypography.body2
+                    .copyWith(color: AppColors.neutral500)),
+          ),
+        ),
+      );
+    }
+
+    return AppCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: [
+          for (int i = 0; i < transactions.length; i++) ...[
+            if (i > 0)
+              const Divider(
+                  indent: AppSpacing.xxl + AppSpacing.lg, height: 1),
+            Builder(builder: (context) {
+              final tx = transactions[i] as Map<String, dynamic>;
+              final type = tx['type']?.toString() ?? '';
+              final amount = tx['amount']?.toString() ?? '0.00';
+              final currency = tx['currency']?.toString() ?? 'EUR';
+              final isPositive =
+                  type == 'credit' || type == 'receive';
+              final title = tx['recipient_name']?.toString() ??
+                  tx['reference']?.toString() ??
+                  type;
+              final status = tx['status']?.toString() ?? '';
+              return TransactionListTile(
+                title: title,
+                subtitle: status,
+                amount:
+                    '${isPositive ? '+' : '-'}$currency $amount',
+                isPositive: isPositive,
+                onTap: () {},
+              );
+            }),
+          ],
+        ],
+      ),
+    );
+  }
+}
 
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader({
@@ -308,12 +324,9 @@ class _SectionHeader extends StatelessWidget {
         if (actionLabel != null)
           GestureDetector(
             onTap: onAction,
-            child: Text(
-              '$actionLabel >',
-              style: AppTypography.body2.copyWith(
-                color: AppColors.primary500,
-              ),
-            ),
+            child: Text('$actionLabel >',
+                style: AppTypography.body2
+                    .copyWith(color: AppColors.primary500)),
           ),
       ],
     );
@@ -325,18 +338,15 @@ class _AccountRow extends StatelessWidget {
     required this.flag,
     required this.currency,
     required this.balance,
-    this.onTap,
   });
 
   final String flag;
   final String currency;
   final String balance;
-  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      onTap: onTap,
       leading: Container(
         width: 32,
         height: 32,
@@ -345,22 +355,17 @@ class _AccountRow extends StatelessWidget {
           shape: BoxShape.circle,
         ),
         child: Center(
-          child: Text(
-            flag,
-            style: AppTypography.caption.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          child: Text(flag,
+              style: AppTypography.caption
+                  .copyWith(fontWeight: FontWeight.w600)),
         ),
       ),
       title: Text(currency, style: AppTypography.body1),
-      trailing: Text(
-        balance,
-        style: AppTypography.body1.copyWith(
-          fontWeight: FontWeight.w600,
-          fontFeatures: const [FontFeature.tabularFigures()],
-        ),
-      ),
+      trailing: Text(balance,
+          style: AppTypography.body1.copyWith(
+            fontWeight: FontWeight.w600,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          )),
       dense: true,
     );
   }

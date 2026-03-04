@@ -2,6 +2,7 @@ package notification
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -96,6 +97,14 @@ func (s *Service) SendNotification(ctx context.Context, req *SendNotificationReq
 		)
 	}
 
+	s.publishNotificationEvent(ctx, n.ID.String(), userID.String(), "notification.sent", map[string]any{
+		"notification_id": n.ID.String(),
+		"user_id":         userID.String(),
+		"type":            n.Type,
+		"channel":         n.Channel,
+		"title":           n.Title,
+	})
+
 	return n, nil
 }
 
@@ -183,5 +192,47 @@ func defaultPreferences(userID uuid.UUID) *NotificationPreferences {
 		KYCAlerts:     true,
 		Marketing:     false,
 		UpdatedAt:     time.Now().UTC(),
+	}
+}
+
+// publishNotificationEvent publishes a notification domain event to Kafka (best-effort).
+func (s *Service) publishNotificationEvent(ctx context.Context, aggregateID, actorID, eventType string, eventData map[string]any) {
+	if s.producer == nil {
+		return
+	}
+
+	data, err := json.Marshal(eventData)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Error("failed to marshal notification event data", zap.Error(err))
+		}
+		return
+	}
+
+	correlationID := ""
+	if ctx != nil {
+		correlationID = common.RequestIDFromContext(ctx)
+	}
+
+	event := events.Event{
+		ID:            uuid.New().String(),
+		Type:          eventType,
+		Source:        "notification-service",
+		AggregateID:   aggregateID,
+		AggregateType: "notification",
+		Data:          data,
+		Metadata: events.EventMetadata{
+			CorrelationID: correlationID,
+			ActorID:       actorID,
+		},
+	}
+
+	if err := s.producer.Publish(ctx, events.TopicNotificationCommands, &event); err != nil {
+		if s.logger != nil {
+			s.logger.Error("failed to publish notification event",
+				zap.String("event_type", eventType),
+				zap.Error(err),
+			)
+		}
 	}
 }
