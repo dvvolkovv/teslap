@@ -182,7 +182,7 @@ func (r *Repository) CreateSession(ctx context.Context, session *Session) error 
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`,
 		session.ID, session.UserID, session.DeviceID, session.AccessTokenJTI,
-		session.IPAddress, session.UserAgent, session.Location,
+		nilIfEmpty(session.IPAddress), session.UserAgent, session.Location,
 		session.ExpiresAt, session.CreatedAt, session.LastActiveAt,
 	)
 	if err != nil {
@@ -250,4 +250,12 @@ func (r *Repository) DeleteSession(ctx context.Context, sessionID uuid.UUID) err
 func (r *Repository) DeleteAllSessions(ctx context.Context, userID uuid.UUID) error {
 	_, err := r.db.Pool.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1`, userID)
 	return err
+}
+
+// nilIfEmpty returns nil for empty strings (avoids invalid inet/uuid casts).
+func nilIfEmpty(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }

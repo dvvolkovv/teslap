@@ -7,11 +7,23 @@ import '../../../core/routing/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../auth/bloc/auth_bloc.dart';
+import '../bloc/profile_bloc.dart';
 
 /// Profile tab with user info, account settings, security, preferences,
 /// support, legal, and logout.
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  @override
+  void initState() {
+    super.initState();
+    context.read<ProfileBloc>().add(const ProfileLoadRequested());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,65 +55,78 @@ class ProfileScreen extends StatelessWidget {
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
                     // User header
-                    AppCard(
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 56,
-                            height: 56,
-                            decoration: const BoxDecoration(
-                              gradient: AppColors.brandGradient,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Center(
-                              child: Text(
-                                'JD',
-                                style: TextStyle(
-                                  color: AppColors.white,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 20,
+                    BlocBuilder<ProfileBloc, ProfileState>(
+                      builder: (context, state) {
+                        final name = state is ProfileLoaded
+                            ? state.fullName
+                            : 'Loading...';
+                        final email = state is ProfileLoaded
+                            ? state.email
+                            : '';
+                        final initials = state is ProfileLoaded
+                            ? state.initials
+                            : '..';
+                        final tier = state is ProfileLoaded
+                            ? state.tier.toUpperCase()
+                            : 'STANDARD';
+                        return AppCard(
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 56,
+                                height: 56,
+                                decoration: const BoxDecoration(
+                                  gradient: AppColors.brandGradient,
+                                  shape: BoxShape.circle,
                                 ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.md),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'John Doe',
-                                  style: AppTypography.h3,
-                                ),
-                                Text(
-                                  'john.doe@example.com',
-                                  style: AppTypography.body2.copyWith(
-                                    color: AppColors.neutral500,
+                                child: Center(
+                                  child: Text(
+                                    initials,
+                                    style: const TextStyle(
+                                      color: AppColors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 20,
+                                    ),
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.sm,
-                              vertical: AppSpacing.xs,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary100,
-                              borderRadius:
-                                  BorderRadius.circular(AppRadius.xs),
-                            ),
-                            child: Text(
-                              'Standard',
-                              style: AppTypography.caption.copyWith(
-                                color: AppColors.primary500,
-                                fontWeight: FontWeight.w600,
                               ),
-                            ),
+                              const SizedBox(width: AppSpacing.md),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(name, style: AppTypography.h3),
+                                    Text(
+                                      email,
+                                      style: AppTypography.body2.copyWith(
+                                        color: AppColors.neutral500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: AppSpacing.sm,
+                                  vertical: AppSpacing.xs,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary100,
+                                  borderRadius:
+                                      BorderRadius.circular(AppRadius.xs),
+                                ),
+                                child: Text(
+                                  tier,
+                                  style: AppTypography.caption.copyWith(
+                                    color: AppColors.primary500,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
                     const SizedBox(height: AppSpacing.lg),
 

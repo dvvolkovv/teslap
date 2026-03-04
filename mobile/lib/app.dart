@@ -16,6 +16,7 @@ import 'features/cards/bloc/card_bloc.dart';
 import 'features/crypto/bloc/crypto_bloc.dart';
 import 'features/home/bloc/home_bloc.dart';
 import 'features/payments/bloc/payment_bloc.dart';
+import 'features/profile/bloc/profile_bloc.dart';
 
 /// Root widget for the TeslaPay application.
 ///
@@ -55,6 +56,11 @@ class TeslaPayApp extends StatelessWidget {
         BlocProvider<CryptoBloc>(
           create: (_) => CryptoBloc(
             cryptoRepository: getIt<CryptoRepository>(),
+          ),
+        ),
+        BlocProvider<ProfileBloc>(
+          create: (_) => ProfileBloc(
+            accountRepository: getIt<AccountRepository>(),
           ),
         ),
       ],
