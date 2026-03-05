@@ -40,8 +40,6 @@ services:
       POSTGRES_DB: teslapay
       POSTGRES_USER: teslapay
       POSTGRES_PASSWORD: teslapay
-    ports:
-      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
@@ -56,8 +54,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
     networks:
       - teslapay
     healthcheck:
@@ -82,8 +78,6 @@ services:
       CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_LOG_DIRS: /var/lib/kafka/data
-    ports:
-      - "9092:9092"
     volumes:
       - kafkadata:/var/lib/kafka/data
     networks:
