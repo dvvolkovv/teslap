@@ -1,0 +1,297 @@
+version: "3.9"
+
+# TeslaPay neobank local development stack.
+# All Go services share a single PostgreSQL database and Kafka cluster.
+# JWT RSA-4096 keys are generated once by the `keygen` service and stored
+# in the named `keysdata` volume mounted at /keys in every Go container.
+#
+# Start everything:  docker compose up -d
+# Primary endpoint:  http://localhost:8080/api/v1
+# Health check:      http://localhost:8080/health
+
+x-go-common: &go-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  environment: &go-env
+    DATABASE_URL: postgres://teslapay:teslapay@postgres:5432/teslapay?sslmode=disable
+    # REDIS_URL must be host:port format — NOT redis://...  (see internal/common/config.go)
+    REDIS_URL: redis:6379
+    KAFKA_BROKERS: kafka:9092
+    JWT_ISSUER: teslapay.eu
+    JWT_PRIVATE_KEY_PATH: /keys/private.pem
+    JWT_PUBLIC_KEY_PATH: /keys/public.pem
+    ACCESS_TOKEN_TTL: 15m
+    REFRESH_TOKEN_TTL: 720h
+    ENVIRONMENT: production
+    LOG_LEVEL: info
+  volumes:
+    - keysdata:/keys
+  networks:
+    - teslapay
+  restart: unless-stopped
+
+services:
+  # ---------------------------------------------------------------------------
+  # Infrastructure
+  # ---------------------------------------------------------------------------
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: teslapay
+      POSTGRES_USER: teslapay
+      POSTGRES_PASSWORD: teslapay
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - teslapay
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U teslapay -d teslapay"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - teslapay
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+  kafka:
+    image: bitnami/kafka:latest
+    environment:
+      KAFKA_CFG_NODE_ID: 1
+      KAFKA_CFG_PROCESS_ROLES: broker,controller
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafkadata:/bitnami/kafka
+    networks:
+      - teslapay
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # One-shot service: generate JWT RSA-4096 keys if they do not already exist.
+  # All Go services depend on this completing successfully before they start.
+  # ---------------------------------------------------------------------------
+
+  keygen:
+    image: alpine
+    volumes:
+      - keysdata:/keys
+    networks:
+      - teslapay
+    command: >
+      sh -c "
+        mkdir -p /keys &&
+        if [ ! -f /keys/private.pem ]; then
+          apk add --no-cache openssl &&
+          openssl genrsa -out /keys/private.pem 4096 &&
+          openssl rsa -in /keys/private.pem -pubout -out /keys/public.pem &&
+          echo 'JWT keys generated';
+        else
+          echo 'JWT keys already exist';
+        fi
+      "
+    restart: "no"
+
+  # ---------------------------------------------------------------------------
+  # Gateway — monolith that runs ALL domain services in one process.
+  # This is the primary deployment unit; use it instead of the individual
+  # microservices unless you need to scale domains independently.
+  # ---------------------------------------------------------------------------
+
+  gateway:
+    <<: *go-common
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: gateway
+    environment:
+      <<: *go-env
+      PORT: 8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      keygen:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # Standalone microservices (alternative to the gateway monolith).
+  # Each service handles only its own domain and listens on a dedicated port.
+  # ---------------------------------------------------------------------------
+
+  auth-service:
+    <<: *go-common
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: auth-service
+    environment:
+      <<: *go-env
+      PORT: 8081
+    ports:
+      - "8081:8081"
+    depends_on:
+      keygen:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
+  account-service:
+    <<: *go-common
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: account-service
+    environment:
+      <<: *go-env
+      PORT: 8082
+    ports:
+      - "8082:8082"
+    depends_on:
+      keygen:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
+  payment-service:
+    <<: *go-common
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: payment-service
+    environment:
+      <<: *go-env
+      PORT: 8083
+    ports:
+      - "8083:8083"
+    depends_on:
+      keygen:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
+  card-service:
+    <<: *go-common
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: card-service
+    environment:
+      <<: *go-env
+      PORT: 8084
+    ports:
+      - "8084:8084"
+    depends_on:
+      keygen:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
+  ledger-service:
+    <<: *go-common
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: ledger-service
+    environment:
+      <<: *go-env
+      PORT: 8085
+    ports:
+      - "8085:8085"
+    depends_on:
+      keygen:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
+  kyc-service:
+    <<: *go-common
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: kyc-service
+    environment:
+      <<: *go-env
+      PORT: 8086
+    ports:
+      - "8086:8086"
+    depends_on:
+      keygen:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
+  notification-service:
+    <<: *go-common
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: notification-service
+    environment:
+      <<: *go-env
+      PORT: 8087
+    ports:
+      - "8087:8087"
+    depends_on:
+      keygen:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+
+# ---------------------------------------------------------------------------
+# Named volumes
+# ---------------------------------------------------------------------------
+
+volumes:
+  pgdata:
+    driver: local
+  kafkadata:
+    driver: local
+  keysdata:
+    driver: local
+
+# ---------------------------------------------------------------------------
+# Networks
+# ---------------------------------------------------------------------------
+
+networks:
+  teslapay:
+    driver: bridge

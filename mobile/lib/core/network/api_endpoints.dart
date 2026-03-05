@@ -1,8 +1,8 @@
 /// Centralised API endpoint constants derived from the TeslaPay API contract.
 abstract final class ApiEndpoints {
-  static const String baseUrl = 'https://b.teslapay.io/api/v1';
+  static const String baseUrl = 'http://77.73.131.137:8080/api/v1';
   static const String stagingBaseUrl =
-      'https://b.teslapay.io/api/v1';
+      'http://77.73.131.137:8080/api/v1';
 
   // ---------------------------------------------------------------------------
   // Auth

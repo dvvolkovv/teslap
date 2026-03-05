@@ -153,9 +153,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 TextButton(
-                  onPressed: () {
-                    // TODO: navigate to email+password login
-                  },
+                  onPressed: () => context.push(AppRoutes.emailLogin),
                   child: Text(
                     'Use password',
                     style: AppTypography.body2.copyWith(

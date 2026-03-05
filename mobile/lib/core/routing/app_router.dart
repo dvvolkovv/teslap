@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/auth/screens/email_login_screen.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/auth/screens/pin_entry_screen.dart';
 import '../../features/cards/screens/card_screen.dart';
@@ -22,6 +23,7 @@ abstract final class AppRoutes {
   static const String register = '/register';
   static const String pinSetup = '/pin-setup';
   static const String login = '/login';
+  static const String emailLogin = '/email-login';
   static const String pinEntry = '/pin-entry';
 
   // Tabs
@@ -83,6 +85,11 @@ final GoRouter appRouter = GoRouter(
       path: AppRoutes.pinEntry,
       name: 'pinEntry',
       builder: (context, state) => const PinEntryScreen(),
+    ),
+    GoRoute(
+      path: AppRoutes.emailLogin,
+      name: 'emailLogin',
+      builder: (context, state) => const EmailLoginScreen(),
     ),
 
     // -----------------------------------------------------------------------
