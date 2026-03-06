@@ -32,7 +32,7 @@ CREATE INDEX IF NOT EXISTS idx_user_credentials_status  ON user_credentials(stat
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS devices (
     id                 UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id            UUID        NOT NULL REFERENCES user_credentials(user_id) ON DELETE CASCADE,
+    user_id            UUID        NOT NULL REFERENCES user_credentials(id) ON DELETE CASCADE,
     device_name        TEXT,
     device_type        TEXT,
     device_fingerprint TEXT,
@@ -40,8 +40,7 @@ CREATE TABLE IF NOT EXISTS devices (
     biometric_key      TEXT,
     is_trusted         BOOLEAN     NOT NULL DEFAULT FALSE,
     registered_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    last_seen_at       TIMESTAMPTZ,
-    CONSTRAINT uq_devices_fingerprint UNIQUE (device_fingerprint)
+    last_seen_at       TIMESTAMPTZ
 );
 
 CREATE INDEX IF NOT EXISTS idx_devices_user_id ON devices(user_id);
@@ -51,9 +50,9 @@ CREATE INDEX IF NOT EXISTS idx_devices_user_id ON devices(user_id);
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS sessions (
     id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id          UUID        NOT NULL,
+    user_id          UUID        NOT NULL REFERENCES user_credentials(id) ON DELETE CASCADE,
     device_id        UUID        NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
-    access_token_jti TEXT,
+    access_token_jti TEXT        UNIQUE,
     ip_address       TEXT,
     user_agent       TEXT,
     location         TEXT,
@@ -72,8 +71,8 @@ CREATE INDEX IF NOT EXISTS idx_sessions_jti       ON sessions(access_token_jti);
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS refresh_tokens (
     id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id    UUID        NOT NULL,
-    device_id  UUID        NOT NULL,
+    user_id    UUID        NOT NULL REFERENCES user_credentials(id) ON DELETE CASCADE,
+    device_id  UUID        NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
     token_hash TEXT        NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL,
     revoked_at TIMESTAMPTZ,
